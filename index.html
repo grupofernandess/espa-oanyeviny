@@ -833,14 +833,22 @@ async function storageGet(key) {
       return null;
     }
   }
-  return memoryStore[key] !== undefined ? memoryStore[key] : null;
+  try {
+    return window.localStorage.getItem(key);
+  } catch (e) {
+    return memoryStore[key] !== undefined ? memoryStore[key] : null;
+  }
 }
 async function storageSet(key, value) {
   if (STORAGE_AVAILABLE) {
     try {
       await window.storage.set(key, value, false);
     } catch (e) {}
-  } else {
+    return;
+  }
+  try {
+    window.localStorage.setItem(key, value);
+  } catch (e) {
     memoryStore[key] = value;
   }
 }
@@ -936,14 +944,14 @@ function statusBtnHtml(key, current) {
   const s = STATUS[key];
   const active = key === current;
   const style = active ? "background:" + s.dot + ";border-color:" + s.dot + ";color:#fff" : "background:#fff;border-color:" + s.border + ";color:" + s.text;
-  return '<button class="av-status-btn" data-status="' + key + '" style="' + style + '">' + s.label + "</button>";
+  return '<button type="button" class="av-status-btn" data-status="' + key + '" style="' + style + '">' + s.label + "</button>";
 }
 function imageGridHtml(images) {
   if (!images.length) return "";
   return images
     .map(
       (img) =>
-        '<div class="av-image-thumb"><img src="' + img.src + '" alt="" class="thumb-img" /><button class="av-image-remove remove-img-btn" data-id="' + img.id + '">' + icon("x", 11) + "</button></div>"
+        '<div class="av-image-thumb"><img src="' + img.src + '" alt="" class="thumb-img" /><button type="button" class="av-image-remove remove-img-btn" data-id="' + img.id + '">' + icon("x", 11) + "</button></div>"
     )
     .join("");
 }
@@ -952,7 +960,7 @@ function linksListHtml(links) {
   return links
     .map(
       (l) =>
-        '<div class="av-link-item"><span style="color:' + BRAND.teal + '">' + icon("link", 13) + '</span><a href="' + escapeHtml(l.url) + '" target="_blank" rel="noopener noreferrer" style="color:' + BRAND.tealDark + '">' + escapeHtml(l.label || l.url) + '</a><button class="av-link-remove remove-link-btn" data-id="' + l.id + '">' + icon("trash", 13) + "</button></div>"
+        '<div class="av-link-item"><span style="color:' + BRAND.teal + '">' + icon("link", 13) + '</span><a href="' + escapeHtml(l.url) + '" target="_blank" rel="noopener noreferrer" style="color:' + BRAND.tealDark + '">' + escapeHtml(l.label || l.url) + '</a><button type="button" class="av-link-remove remove-link-btn" data-id="' + l.id + '">' + icon("trash", 13) + "</button></div>"
     )
     .join("");
 }
@@ -962,7 +970,7 @@ function sectionHtml(section) {
     '<div class="av-section"><div class="av-section-title-row"><p class="av-section-title">' +
     escapeHtml(section.title) +
     "</p>" +
-    (section.isPrompt ? '<button class="av-copy-btn copy-btn">' + icon("copy", 12) + '<span class="copy-label">Copiar</span></button>' : "") +
+    (section.isPrompt ? '<button type="button" class="av-copy-btn copy-btn">' + icon("copy", 12) + '<span class="copy-label">Copiar</span></button>' : "") +
     '</div><div class="av-section-body' +
     (section.isPrompt ? " is-prompt" : "") +
     '">' +
@@ -1005,17 +1013,17 @@ function trackerPanelHtml(day, type, content, tracker) {
     STATUS_ORDER.map((k) => statusBtnHtml(k, tracker.status)).join("") +
     "</div></div>" +
     '<div class="av-upload-row"><div class="av-upload-head"><p class="av-status-title" style="color:' + accentDark + ';margin:0">Imagens / criativos</p>' +
-    '<button class="av-upload-btn upload-btn" style="color:' + accentDark + '">' + icon("upload", 12) + '<span class="upload-label">Subir imagens</span></button>' +
+    '<button type="button" class="av-upload-btn upload-btn" style="color:' + accentDark + '">' + icon("upload", 12) + '<span class="upload-label">Subir imagens</span></button>' +
     '<input type="file" accept="image/*" multiple class="file-input" style="display:none" /></div>' +
     '<div class="av-image-grid image-grid-slot">' + imageGridHtml(tracker.images) + "</div></div>" +
     '<div class="av-links-row"><p class="av-status-title" style="color:' + accentDark + '">Links (Drive, etc.)</p>' +
     '<div class="av-link-inputs"><input class="av-input av-input-name link-label-input" placeholder="Nome (opcional)" />' +
     '<input class="av-input av-input-url link-url-input" placeholder="Cole o link aqui" />' +
-    '<button class="av-add-btn add-link-btn" style="background:' + accent + '">' + icon("plus", 13) + "Add</button></div>" +
+    '<button type="button" class="av-add-btn add-link-btn" style="background:' + accent + '">' + icon("plus", 13) + "Add</button></div>" +
     '<div class="av-links-list links-list-slot">' + linksListHtml(tracker.links) + "</div></div>" +
     '<div class="av-notes-row"><p class="av-notes-label" style="color:' + accentDark + '">' + icon("note", 12) + " Anotações / ajustes deste dia</p>" +
     '<textarea class="av-textarea notes-textarea" rows="2" placeholder="Ex.: trocar a criança do vídeo, ajustar cor da legenda...">' + escapeHtml(tracker.notes || "") + "</textarea>" +
-    '<div class="av-notes-save-row"><button class="av-save-btn save-notes-btn" style="background:' + accent + '">Salvar</button>' +
+    '<div class="av-notes-save-row"><button type="button" class="av-save-btn save-notes-btn" style="background:' + accent + '">Salvar</button>' +
     '<span class="notes-saved-tag">' + (tracker.notes ? notesSavedTagHtml() : "") + "</span></div>" +
     "</div>" +
     "</div>"
@@ -1041,7 +1049,7 @@ function cellHtml(day) {
   const hasNotes = !!((tracker.feed && tracker.feed.notes) || (tracker.story && tracker.story.notes));
   const preview = (content.feed && content.feed.theme) || (content.story && content.story.theme) || "";
   return (
-    '<button class="av-day-card" data-day="' + day + '" style="border-color:' + borderColor + '">' +
+    '<button type="button" class="av-day-card" data-day="' + day + '" style="border-color:' + borderColor + '">' +
     '<div class="av-day-top"><span class="av-day-num">' + day + "</span>" +
     (hasNotes ? '<span class="av-day-notes-tag">Notas</span>' : "") +
     "</div>" +
@@ -1095,7 +1103,7 @@ function renderHeader() {
     '<div><h1 class="av-display av-title">Calendário de conteúdo</h1>' +
     '<p class="av-subtitle">01 SET — 30 SET 2026 · clique em um dia para ver o roteiro</p></div>' +
     "</div>" +
-    '<button id="reset-btn" class="av-reset-btn">Reiniciar</button>' +
+    '<button type="button" id="reset-btn" class="av-reset-btn">Reiniciar</button>' +
     "</div>" +
     '<div class="av-stats-row">' +
     '<div class="av-stat-pill" style="color:' + BRAND.pinkDark + '">' + icon("camera", 14) + "<span>Feed " + (loaded ? stats.feedDone : "–") + "/" + stats.feedTotal + "</span></div>" +
@@ -1170,7 +1178,7 @@ function openModal(day) {
   overlay.id = "modal-overlay";
   overlay.innerHTML =
     '<div class="av-modal-card" id="modal-card">' +
-    '<div class="av-modal-banner"><button class="av-modal-close" id="modal-close">' + icon("x", 17) + "</button>" +
+    '<div class="av-modal-banner"><button type="button" class="av-modal-close" id="modal-close">' + icon("x", 17) + "</button>" +
     '<p class="av-modal-weekday">' + WEEKDAYS_FULL[wd] + "</p>" +
     '<h2 class="av-display av-modal-date">' + day + " de setembro</h2></div>" +
     '<div class="av-modal-mascot-row"><img src="' + mascot.img + '" alt="' + mascot.name + '" class="av-modal-mascot-img" />' +
