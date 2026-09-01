@@ -88,6 +88,16 @@ body { margin:0; background:#FFFBF3; }
 .av-tag { border-radius:999px; background:#fff; padding:4px 10px; font-size:10.5px; font-weight:800; }
 .av-theme-line { margin-bottom:10px; font-size:12.5px; font-weight:800; }
 .av-content-box { border-radius:16px; background:rgba(255,255,255,0.75); padding:10px; }
+.av-content-toolbar { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.av-edited-badge { border-radius:999px; background:#F3E6F3; color:#8E3B8F; padding:3px 10px; font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.03em; white-space:nowrap; }
+.av-content-toolbar-btns { display:flex; gap:6px; margin-left:auto; flex-wrap:wrap; justify-content:flex-end; }
+.av-edit-link { border:none; background:rgba(0,0,0,0.06); border-radius:999px; padding:5px 12px; font-size:10.5px; font-weight:800; cursor:pointer; color:#2B1A33; display:flex; align-items:center; gap:4px; white-space:nowrap; }
+.av-edit-link:hover { background:rgba(0,0,0,0.11); }
+.av-cancel-btn { border-radius:999px; padding:6px 14px; font-size:11.5px; font-weight:800; border:1px solid rgba(0,0,0,0.16); background:#fff; cursor:pointer; color:rgba(43,26,51,0.55); }
+.av-content-edit-view { font-size:12.5px; line-height:1.6; color:#2B1A33; }
+.av-content-edit-view p { margin:0; }
+.av-content-edit-view p + p { margin-top:6px; }
+.content-edit-textarea { font-family:inherit; }
 .av-section { margin-bottom:10px; }
 .av-section:last-child { margin-bottom:0; }
 .av-section-title-row { margin-bottom:5px; display:flex; align-items:center; justify-content:space-between; gap:6px; }
@@ -780,7 +790,7 @@ function escapeHtml(str) {
 }
 
 /* ---------- Utilidades ---------- */
-function emptyTracker() { return { status: "pendente", notes: "", images: [], links: [] }; }
+function emptyTracker() { return { status: "pendente", notes: "", images: [], links: [], contentText: "" }; }
 function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36); }
 
 function compressImage(file) {
@@ -884,7 +894,12 @@ function stripImages(dayObj) {
   const out = {};
   ["feed", "story"].forEach((type) => {
     if (dayObj[type]) {
-      out[type] = { status: dayObj[type].status || "pendente", notes: dayObj[type].notes || "", links: dayObj[type].links || [] };
+      out[type] = {
+        status: dayObj[type].status || "pendente",
+        notes: dayObj[type].notes || "",
+        links: dayObj[type].links || [],
+        contentText: dayObj[type].contentText || "",
+      };
     }
   });
   return out;
@@ -904,6 +919,7 @@ function mergeRemoteIntoDay(day, remote) {
         status: remote[type].status || "pendente",
         notes: remote[type].notes || "",
         links: remote[type].links || [],
+        contentText: remote[type].contentText || "",
       });
     }
   });
@@ -970,22 +986,29 @@ function subscribeFirestore() {
 function refreshAllUI() {
   updateStatsDom();
   Object.keys(DAYS).map(Number).forEach((d) => refreshDayCellDom(d));
-  if (openDayNum !== null) {
-    ["feed", "story"].forEach((type) => {
-      if (!DAYS[openDayNum][type]) return;
-      const panel = document.querySelector('.av-tracker[data-type="' + type + '"]');
-      if (!panel) return;
-      const tracker = getTracker(openDayNum, type);
-      refreshTrackerStatus(panel, type, tracker.status);
-      const tagSlot = panel.querySelector(".notes-saved-tag");
-      if (tagSlot) tagSlot.innerHTML = tracker.notes && tracker.notes.trim() ? notesSavedTagHtml() : "";
-      const linksSlot = panel.querySelector(".links-list-slot");
-      if (linksSlot) {
-        linksSlot.innerHTML = linksListHtml(tracker.links);
-        wireLinksList(panel, openDayNum, type);
-      }
-    });
-  }
+  if (openDayNum === null) return;
+  const overlay = document.getElementById("modal-overlay");
+  if (!overlay) return;
+  ["feed", "story"].forEach((type) => {
+    if (!DAYS[openDayNum][type]) return;
+    const panel = overlay.querySelector('.av-tracker[data-type="' + type + '"]');
+    if (!panel) return;
+    const editSlot = panel.querySelector(".content-edit-slot");
+    const isEditingContent = !!(editSlot && editSlot.style.display !== "none");
+    if (!isEditingContent) {
+      rerenderTrackerPanel(overlay, openDayNum, type);
+      return;
+    }
+    const tracker = getTracker(openDayNum, type);
+    refreshTrackerStatus(panel, type, tracker.status);
+    const tagSlot = panel.querySelector(".notes-saved-tag");
+    if (tagSlot) tagSlot.innerHTML = tracker.notes && tracker.notes.trim() ? notesSavedTagHtml() : "";
+    const linksSlot = panel.querySelector(".links-list-slot");
+    if (linksSlot) {
+      linksSlot.innerHTML = linksListHtml(tracker.links);
+      wireLinksList(panel, openDayNum, type);
+    }
+  });
 }
 
 function persistDay(day) {
@@ -1094,17 +1117,26 @@ function sectionHtml(section) {
   );
 }
 
+function flattenContent(type, content) {
+  if (type === "feed") {
+    return content.sections.map((s) => s.title.toUpperCase() + "\n" + s.items.join("\n")).join("\n\n");
+  }
+  let txt = "SEQUÊNCIA DE STORIES\n" + content.items.join("\n");
+  if (content.note) txt += "\n\n" + content.note;
+  return txt;
+}
+
 function trackerPanelHtml(day, type, content, tracker) {
   const isFeed = type === "feed";
   const accent = isFeed ? BRAND.pink : BRAND.teal;
   const accentDark = isFeed ? BRAND.pinkDark : BRAND.tealDark;
   const accentBg = isFeed ? "#FDEBF4" : "#E1F7F8";
 
-  let contentInner = "";
+  let defaultInner = "";
   if (isFeed) {
-    contentInner = content.sections.map(sectionHtml).join("");
+    defaultInner = content.sections.map(sectionHtml).join("");
   } else {
-    contentInner =
+    defaultInner =
       '<div class="av-section"><p class="av-section-title" style="color:' +
       accentDark +
       ';margin-bottom:5px">Sequência de stories</p><div class="av-section-body">' +
@@ -1113,6 +1145,27 @@ function trackerPanelHtml(day, type, content, tracker) {
       (content.note ? '<p class="av-note-line" style="color:' + accentDark + '">' + escapeHtml(content.note) + "</p>" : "") +
       "</div>";
   }
+
+  const hasOverride = !!(tracker.contentText && tracker.contentText.trim());
+  const viewHtml = hasOverride
+    ? '<div class="av-content-edit-view">' + tracker.contentText.split("\n").map((line) => "<p>" + (escapeHtml(line) || "&nbsp;") + "</p>").join("") + "</div>"
+    : defaultInner;
+  const textareaValue = hasOverride ? tracker.contentText : flattenContent(type, content);
+
+  const contentInner =
+    '<div class="av-content-toolbar">' +
+    (hasOverride ? '<span class="av-edited-badge">Editado</span>' : "<span></span>") +
+    '<div class="av-content-toolbar-btns">' +
+    (hasOverride ? '<button type="button" class="av-edit-link restore-content-btn">Restaurar original</button>' : "") +
+    '<button type="button" class="av-edit-link edit-content-btn">' + icon("note", 11) + " Editar</button>" +
+    "</div></div>" +
+    '<div class="content-view-slot">' + viewHtml + "</div>" +
+    '<div class="content-edit-slot" style="display:none">' +
+    '<textarea class="av-textarea content-edit-textarea" rows="10">' + escapeHtml(textareaValue) + "</textarea>" +
+    '<div class="av-notes-save-row">' +
+    '<button type="button" class="av-save-btn save-content-btn" style="background:' + accent + '">Salvar</button>' +
+    '<button type="button" class="av-cancel-btn cancel-content-btn">Cancelar</button>' +
+    "</div></div>";
 
   return (
     '<div class="av-tracker" data-type="' + type + '" style="border-color:' + accent + '55;background:' + accentBg + '">' +
@@ -1327,9 +1380,56 @@ function closeModal() {
   openDayNum = null;
 }
 
+function rerenderTrackerPanel(overlay, day, type) {
+  const oldPanel = overlay.querySelector('.av-tracker[data-type="' + type + '"]');
+  if (!oldPanel) return;
+  const content = DAYS[day][type];
+  const tracker = getTracker(day, type);
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = trackerPanelHtml(day, type, content, tracker);
+  const newPanel = wrapper.firstElementChild;
+  oldPanel.replaceWith(newPanel);
+  wireTrackerPanel(overlay, day, type, content);
+}
+
 function wireTrackerPanel(overlay, day, type, content) {
   const panel = overlay.querySelector('.av-tracker[data-type="' + type + '"]');
   if (!panel) return;
+
+  const editBtn = panel.querySelector(".edit-content-btn");
+  const restoreBtn = panel.querySelector(".restore-content-btn");
+  const viewSlot = panel.querySelector(".content-view-slot");
+  const editSlot = panel.querySelector(".content-edit-slot");
+  const contentTextarea = panel.querySelector(".content-edit-textarea");
+  const cancelContentBtn = panel.querySelector(".cancel-content-btn");
+  const saveContentBtn = panel.querySelector(".save-content-btn");
+
+  if (editBtn) {
+    editBtn.addEventListener("click", () => {
+      viewSlot.style.display = "none";
+      editSlot.style.display = "block";
+      contentTextarea.focus();
+    });
+  }
+  if (cancelContentBtn) {
+    cancelContentBtn.addEventListener("click", () => {
+      editSlot.style.display = "none";
+      viewSlot.style.display = "block";
+    });
+  }
+  if (saveContentBtn) {
+    saveContentBtn.addEventListener("click", () => {
+      updateTracker(day, type, { contentText: contentTextarea.value }, true);
+      rerenderTrackerPanel(overlay, day, type);
+    });
+  }
+  if (restoreBtn) {
+    restoreBtn.addEventListener("click", () => {
+      if (!confirm("Restaurar o conteúdo original deste dia? Sua edição será apagada.")) return;
+      updateTracker(day, type, { contentText: "" }, true);
+      rerenderTrackerPanel(overlay, day, type);
+    });
+  }
 
   panel.querySelectorAll(".av-status-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
