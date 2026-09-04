@@ -89,8 +89,10 @@ body { margin:0; background:#FFFBF3; }
 .av-tracker-head { margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .av-tracker-head-left { display:flex; align-items:center; gap:8px; }
 .av-tracker-label { font-size:12.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; }
-.av-tag-row { margin-bottom:10px; display:flex; flex-wrap:wrap; gap:6px; }
+.av-tag-row { margin-bottom:10px; display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
 .av-tag { border-radius:999px; background:#fff; padding:4px 10px; font-size:10.5px; font-weight:800; }
+.av-format-group { display:flex; flex-wrap:wrap; gap:5px; }
+.av-format-btn { border-radius:999px; padding:4px 11px; font-size:10.5px; font-weight:800; border-width:2px; border-style:solid; cursor:pointer; }
 .av-theme-line { margin-bottom:10px; font-size:12.5px; font-weight:800; }
 .av-content-box { border-radius:16px; background:rgba(255,255,255,0.75); padding:10px; }
 .av-content-toolbar { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
@@ -799,7 +801,7 @@ function escapeHtml(str) {
 }
 
 /* ---------- Utilidades ---------- */
-function emptyTracker() { return { status: "pendente", notes: "", images: [], links: [], contentText: "" }; }
+function emptyTracker() { return { status: "pendente", notes: "", images: [], links: [], contentText: "", format: "" }; }
 function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36); }
 function pad2(n) { return n < 10 ? "0" + n : "" + n; }
 
@@ -950,6 +952,7 @@ function stripImages(dayObj) {
         notes: dayObj[type].notes || "",
         links: dayObj[type].links || [],
         contentText: dayObj[type].contentText || "",
+        format: dayObj[type].format || "",
       };
     }
   });
@@ -966,6 +969,7 @@ function mergeRemoteIntoDay(dk, remote) {
         notes: remote[type].notes || "",
         links: remote[type].links || [],
         contentText: remote[type].contentText || "",
+        format: remote[type].format || "",
       });
     }
   });
@@ -1205,6 +1209,22 @@ function flattenContent(type, content) {
   return txt;
 }
 
+const FEED_FORMATS = [
+  { key: "Reels", label: "Reels" },
+  { key: "Carrossel", label: "Carrossel" },
+  { key: "Estático", label: "Postagem estática" },
+];
+function resolveFeedFormat(tracker, content) {
+  if (tracker.format && FEED_FORMATS.some((f) => f.key === tracker.format)) return tracker.format;
+  if (FEED_FORMATS.some((f) => f.key === content.format)) return content.format;
+  return "Reels";
+}
+function formatBtnHtml(key, label, current, accent, accentDark) {
+  const active = key === current;
+  const style = active ? "background:" + accent + ";border-color:" + accent + ";color:#fff" : "background:#fff;border-color:" + accent + "55;color:" + accentDark;
+  return '<button type="button" class="av-format-btn" data-format="' + key + '" style="' + style + '">' + label + "</button>";
+}
+
 function trackerPanelHtml(dk, type, content, tracker) {
   const isFeed = type === "feed";
   const accent = isFeed ? BRAND.pink : BRAND.teal;
@@ -1253,7 +1273,9 @@ function trackerPanelHtml(dk, type, content, tracker) {
     '<span class="av-tracker-label">' + (isFeed ? "Feed" : "Stories") + "</span></div>" +
     '<span class="chip-slot">' + chipHtml(type, tracker.status) + "</span></div>" +
     (isFeed
-      ? '<div class="av-tag-row"><span class="av-tag" style="color:' + accentDark + '">' + escapeHtml(content.format) + '</span><span class="av-tag" style="color:' + accentDark + '">Objetivo: ' + escapeHtml(content.objective) + "</span></div>"
+      ? '<div class="av-tag-row"><div class="av-format-group format-group-slot">' +
+        FEED_FORMATS.map((f) => formatBtnHtml(f.key, f.label, resolveFeedFormat(tracker, content), accent, accentDark)).join("") +
+        '</div><span class="av-tag" style="color:' + accentDark + '">Objetivo: ' + escapeHtml(content.objective) + "</span></div>"
       : '<p class="av-theme-line" style="color:' + accentDark + '">Tema: ' + escapeHtml(content.theme) + "</p>") +
     '<div class="av-content-box">' + contentInner + "</div>" +
     '<div class="av-status-row"><p class="av-status-title" style="color:' + accentDark + '">Status</p><div class="av-status-buttons status-buttons-slot">' +
@@ -1540,6 +1562,23 @@ function wireTrackerPanel(overlay, dk, type, content) {
       updateStatsDom();
     });
   });
+
+  if (type === "feed") {
+    const accent = BRAND.pink;
+    const accentDark = BRAND.pinkDark;
+    panel.querySelectorAll(".av-format-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.format;
+        updateTracker(dk, type, { format: key }, true);
+        panel.querySelectorAll(".av-format-btn").forEach((b) => {
+          const active = b.dataset.format === key;
+          b.style.cssText = active
+            ? "background:" + accent + ";border-color:" + accent + ";color:#fff"
+            : "background:#fff;border-color:" + accent + "55;color:" + accentDark;
+        });
+      });
+    });
+  }
 
   const fileInput = panel.querySelector(".file-input");
   const uploadBtn = panel.querySelector(".upload-btn");
