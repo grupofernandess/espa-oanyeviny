@@ -32,6 +32,11 @@ body { margin:0; background:#FFFBF3; }
 .av-subtitle { font-size:11.5px; font-weight:700; color:rgba(43,26,51,0.5); margin:4px 0 0; }
 .av-sync-badge { display:flex; align-items:center; gap:6px; margin:6px 0 0; font-size:10.5px; font-weight:800; color:#0E5F67; }
 .av-sync-dot { width:7px; height:7px; border-radius:50%; background:#3EC6D2; box-shadow:0 0 0 3px rgba(62,198,210,0.25); flex-shrink:0; }
+.av-month-nav { display:flex; align-items:center; gap:8px; margin-top:3px; }
+.av-month-arrow { width:26px; height:26px; border-radius:50%; border:none; background:rgba(0,0,0,0.07); color:#5A2A5B; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; padding:0; }
+.av-month-arrow:hover { background:rgba(0,0,0,0.13); }
+.av-month-arrow:disabled { opacity:0.3; cursor:not-allowed; }
+.av-month-label { font-size:13px; font-weight:800; color:#5A2A5B; min-width:112px; text-align:center; }
 .av-reset-btn { flex-shrink:0; border-radius:999px; border:1px solid rgba(0,0,0,0.12); background:rgba(255,255,255,0.7); padding:7px 14px; font-size:11px; font-weight:800; color:rgba(43,26,51,0.45); cursor:pointer; }
 .av-reset-btn:hover { background:#fff; }
 
@@ -153,6 +158,8 @@ body { margin:0; background:#FFFBF3; }
   .av-logo{height:92px;width:92px;}
   .av-title{font-size:34px;}
   .av-subtitle{font-size:14px;}
+  .av-month-arrow{width:30px; height:30px;}
+  .av-month-label{font-size:15px; min-width:130px;}
   .av-reset-btn{padding:8px 18px; font-size:12px;}
   .av-stat-pill{font-size:13.5px; padding:9px 16px;}
   .av-legend-item{font-size:12px;}
@@ -777,6 +784,8 @@ const ICON_PATHS = {
   check: '<polyline points="20 6 9 17 4 12"></polyline>',
   plus: '<circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line>',
   note: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>',
+  chevronleft: '<polyline points="15 18 9 12 15 6"></polyline>',
+  chevronright: '<polyline points="9 18 15 12 9 6"></polyline>',
 };
 function icon(name, size) {
   size = size || 14;
@@ -792,6 +801,7 @@ function escapeHtml(str) {
 /* ---------- Utilidades ---------- */
 function emptyTracker() { return { status: "pendente", notes: "", images: [], links: [], contentText: "" }; }
 function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36); }
+function pad2(n) { return n < 10 ? "0" + n : "" + n; }
 
 function compressImage(file) {
   return new Promise((resolve, reject) => {
@@ -822,6 +832,7 @@ const MASCOT_TIPS = [
   "Sobe as imagens prontas direto aqui no dia certo.",
   "Cola o link do Drive pra gente nunca perder nada.",
   "Toda quarta tem Quarta do Corte — não esquece!",
+  "Use as setinhas pra planejar os próximos meses também!",
   "Quando terminar, marca como Publicado pra eu comemorar contigo.",
 ];
 const MASCOT_CAST = [
@@ -834,7 +845,46 @@ const MASCOT_CAST = [
 ];
 const STAR_IMAGES = [IMG_STAR_PURPLE, IMG_STAR_BLUE, IMG_STAR_PINK];
 
-/* ---------- Firebase (dados compartilhados da equipe: status, notas e links) ---------- */
+/* ---------- Meses cobertos: Setembro/2026 até Dezembro/2027 ---------- */
+const MONTH_NAMES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+const MONTHS = [];
+for (let i = 0; i < 16; i++) {
+  const total = 8 + i;
+  const year = 2026 + Math.floor(total / 12);
+  const month = total % 12;
+  MONTHS.push({ year, month });
+}
+
+function daysInMonth(year, month) { return new Date(year, month + 1, 0).getDate(); }
+function weekdayOfDate(year, month, day) { return new Date(year, month, day).getDay(); }
+function dateKeyFor(year, month, day) { return year + "-" + pad2(month + 1) + "-" + pad2(day); }
+function parseDk(dk) {
+  const parts = dk.split("-");
+  return { year: Number(parts[0]), month: Number(parts[1]) - 1, day: Number(parts[2]) };
+}
+
+function blankDayContent() {
+  return {
+    feed: {
+      format: "A definir",
+      theme: "Planeje o conteúdo de Feed deste dia",
+      objective: "A definir",
+      sections: [{ title: "Conteúdo", items: [] }],
+    },
+    story: {
+      theme: "Planeje os Stories deste dia",
+      items: [],
+    },
+  };
+}
+
+function getDayContentByDk(dk) {
+  const { year, month, day } = parseDk(dk);
+  if (year === 2026 && month === 8 && DAYS[day]) return DAYS[day];
+  return blankDayContent();
+}
+
+/* ---------- Firebase (dados compartilhados da equipe) ---------- */
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyB4TCKZ_ZqnTCjKy9AAzBR3EydhYZPszlA",
   authDomain: "espacoanyeviny-27e02.firebaseapp.com",
@@ -843,7 +893,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "198245060734",
   appId: "1:198245060734:web:68acf18cb5ea6c53fdc82f",
 };
-const FIRESTORE_COLLECTION = "anyviny-setembro-2026";
+const FIRESTORE_COLLECTION = "anyviny-calendario";
 let fsDb = null;
 try {
   if (typeof firebase !== "undefined") {
@@ -853,40 +903,41 @@ try {
 } catch (e) {
   fsDb = null;
 }
+let unsubscribeMonth = null;
 
 /* ---------- Armazenamento local (imagens ficam só neste aparelho) ---------- */
 const STORAGE_AVAILABLE = typeof window.storage !== "undefined";
 const memoryStore = {};
 
-function localKey(day) { return "anyviny-setembro-" + dateKey(Number(day)); }
+function localKey(dk) { return "anyviny-cal-" + dk; }
 
-function loadLocalFull(day) {
+function loadLocalFull(dk) {
   try {
-    const raw = window.localStorage.getItem(localKey(day));
+    const raw = window.localStorage.getItem(localKey(dk));
     return raw ? JSON.parse(raw) : null;
   } catch (e) {
-    return memoryStore[localKey(day)] || null;
+    return memoryStore[localKey(dk)] || null;
   }
 }
-function saveLocalFull(day, dayObj) {
+function saveLocalFull(dk, dayObj) {
   try {
-    window.localStorage.setItem(localKey(day), JSON.stringify(dayObj));
+    window.localStorage.setItem(localKey(dk), JSON.stringify(dayObj));
   } catch (e) {
-    memoryStore[localKey(day)] = dayObj;
+    memoryStore[localKey(dk)] = dayObj;
   }
 }
 
-async function claudeGet(day) {
+async function claudeGet(dk) {
   try {
-    const res = await window.storage.get(localKey(day), false);
+    const res = await window.storage.get(localKey(dk), false);
     return res ? JSON.parse(res.value) : null;
   } catch (e) {
     return null;
   }
 }
-async function claudeSet(day, dayObj) {
+async function claudeSet(dk, dayObj) {
   try {
-    await window.storage.set(localKey(day), JSON.stringify(dayObj), false);
+    await window.storage.set(localKey(dk), JSON.stringify(dayObj), false);
   } catch (e) {}
 }
 
@@ -905,13 +956,8 @@ function stripImages(dayObj) {
   return out;
 }
 
-function dayFromKey(key) {
-  const parts = key.split("-");
-  return parts.length === 3 ? Number(parts[2]) : null;
-}
-
-function mergeRemoteIntoDay(day, remote) {
-  const prev = dayState[day] || {};
+function mergeRemoteIntoDay(dk, remote) {
+  const prev = dayState[dk] || {};
   const next = Object.assign({}, prev);
   ["feed", "story"].forEach((type) => {
     if (remote[type] && prev[type] !== undefined) {
@@ -923,154 +969,186 @@ function mergeRemoteIntoDay(day, remote) {
       });
     }
   });
-  dayState[day] = next;
+  dayState[dk] = next;
 }
 
 /* ---------- Estado ---------- */
 let dayState = {};
 let loaded = false;
-let openDayNum = null;
-let mascotCastIndex = 0;
-let mascotMsgIndex = null;
+let openDayKey = null;
 const debounceTimers = {};
 
-async function loadAll() {
-  const dayNums = Object.keys(DAYS).map(Number);
+function computeInitialMonthIdx() {
+  const now = new Date();
+  const idx = MONTHS.findIndex((m) => m.year === now.getFullYear() && m.month === now.getMonth());
+  if (idx !== -1) return idx;
+  const nowTotal = now.getFullYear() * 12 + now.getMonth();
+  const firstTotal = MONTHS[0].year * 12 + MONTHS[0].month;
+  return nowTotal < firstTotal ? 0 : MONTHS.length - 1;
+}
+let currentMonthIdx = computeInitialMonthIdx();
+
+async function loadMonth(monthIdx) {
+  const { year, month } = MONTHS[monthIdx];
+  const nDays = daysInMonth(year, month);
+  const days = [];
+  for (let d = 1; d <= nDays; d++) days.push(d);
   await Promise.all(
-    dayNums.map(async (d) => {
+    days.map(async (d) => {
+      const dk = dateKeyFor(year, month, d);
+      if (dayState[dk]) return;
+      const content = getDayContentByDk(dk);
       let base = {};
-      if (DAYS[d].feed) base.feed = emptyTracker();
-      if (DAYS[d].story) base.story = emptyTracker();
-
-      const local = loadLocalFull(d);
+      if (content.feed) base.feed = emptyTracker();
+      if (content.story) base.story = emptyTracker();
+      const local = loadLocalFull(dk);
       if (local) base = Object.assign({}, base, local);
-
       if (!fsDb && STORAGE_AVAILABLE) {
-        const remote = await claudeGet(d);
+        const remote = await claudeGet(dk);
         if (remote) base = Object.assign({}, base, remote);
       }
-      dayState[d] = base;
+      dayState[dk] = base;
     })
   );
-  loaded = true;
-
-  if (fsDb) {
-    try {
-      const snap = await fsDb.collection(FIRESTORE_COLLECTION).get();
-      snap.forEach((doc) => {
-        const day = dayFromKey(doc.id);
-        if (day) mergeRemoteIntoDay(day, doc.data());
-      });
-    } catch (e) {}
-  }
 }
 
-function subscribeFirestore() {
+function subscribeMonth(monthIdx) {
+  if (unsubscribeMonth) {
+    unsubscribeMonth();
+    unsubscribeMonth = null;
+  }
   if (!fsDb) return;
-  fsDb.collection(FIRESTORE_COLLECTION).onSnapshot(
-    (snapshot) => {
-      let anyChange = false;
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === "removed") return;
-        const day = dayFromKey(change.doc.id);
-        if (!day) return;
-        mergeRemoteIntoDay(day, change.doc.data());
-        anyChange = true;
-      });
-      if (anyChange && loaded) refreshAllUI();
-    },
-    () => {}
-  );
+  const { year, month } = MONTHS[monthIdx];
+  const nDays = daysInMonth(year, month);
+  const startId = dateKeyFor(year, month, 1);
+  const endId = dateKeyFor(year, month, nDays);
+  unsubscribeMonth = fsDb
+    .collection(FIRESTORE_COLLECTION)
+    .where(firebase.firestore.FieldPath.documentId(), ">=", startId)
+    .where(firebase.firestore.FieldPath.documentId(), "<=", endId)
+    .onSnapshot(
+      (snapshot) => {
+        let any = false;
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "removed") return;
+          mergeRemoteIntoDay(change.doc.id, change.doc.data());
+          any = true;
+        });
+        if (any && loaded) refreshAllUI();
+      },
+      () => {}
+    );
 }
 
 function refreshAllUI() {
   updateStatsDom();
-  Object.keys(DAYS).map(Number).forEach((d) => refreshDayCellDom(d));
-  if (openDayNum === null) return;
+  refreshVisibleGrid();
+  if (openDayKey === null) return;
   const overlay = document.getElementById("modal-overlay");
   if (!overlay) return;
+  const content = getDayContentByDk(openDayKey);
   ["feed", "story"].forEach((type) => {
-    if (!DAYS[openDayNum][type]) return;
+    if (!content[type]) return;
     const panel = overlay.querySelector('.av-tracker[data-type="' + type + '"]');
     if (!panel) return;
     const editSlot = panel.querySelector(".content-edit-slot");
     const isEditingContent = !!(editSlot && editSlot.style.display !== "none");
     if (!isEditingContent) {
-      rerenderTrackerPanel(overlay, openDayNum, type);
+      rerenderTrackerPanel(overlay, openDayKey, type);
       return;
     }
-    const tracker = getTracker(openDayNum, type);
+    const tracker = getTracker(openDayKey, type);
     refreshTrackerStatus(panel, type, tracker.status);
     const tagSlot = panel.querySelector(".notes-saved-tag");
     if (tagSlot) tagSlot.innerHTML = tracker.notes && tracker.notes.trim() ? notesSavedTagHtml() : "";
     const linksSlot = panel.querySelector(".links-list-slot");
     if (linksSlot) {
       linksSlot.innerHTML = linksListHtml(tracker.links);
-      wireLinksList(panel, openDayNum, type);
+      wireLinksList(panel, openDayKey, type);
     }
   });
 }
 
-function persistDay(day) {
-  const dayObj = dayState[day];
-  saveLocalFull(day, dayObj);
+function refreshVisibleGrid() {
+  const { year, month } = MONTHS[currentMonthIdx];
+  const nDays = daysInMonth(year, month);
+  for (let d = 1; d <= nDays; d++) refreshDayCellDom(dateKeyFor(year, month, d));
+}
+
+function persistDay(dk) {
+  const dayObj = dayState[dk];
+  saveLocalFull(dk, dayObj);
   if (fsDb) {
-    fsDb
-      .collection(FIRESTORE_COLLECTION)
-      .doc(dateKey(Number(day)))
-      .set(stripImages(dayObj), { merge: true })
-      .catch(() => {});
+    fsDb.collection(FIRESTORE_COLLECTION).doc(dk).set(stripImages(dayObj), { merge: true }).catch(() => {});
   } else if (STORAGE_AVAILABLE) {
-    claudeSet(day, dayObj);
+    claudeSet(dk, dayObj);
   }
 }
 
-function getTracker(day, type) {
-  const d = dayState[day] || {};
+function getTracker(dk, type) {
+  const d = dayState[dk] || {};
   return d[type] || emptyTracker();
 }
 
-function updateTracker(day, type, patch, immediate) {
-  const prevDay = dayState[day] || {};
+function updateTracker(dk, type, patch, immediate) {
+  const prevDay = dayState[dk] || {};
   const prevTracker = prevDay[type] || emptyTracker();
-  dayState[day] = Object.assign({}, prevDay, { [type]: Object.assign({}, prevTracker, patch) });
+  dayState[dk] = Object.assign({}, prevDay, { [type]: Object.assign({}, prevTracker, patch) });
   if (immediate) {
-    persistDay(day);
+    persistDay(dk);
   } else {
-    const dkey = day + "-" + type;
+    const dkey = dk + "-" + type;
     clearTimeout(debounceTimers[dkey]);
-    debounceTimers[dkey] = setTimeout(() => persistDay(day), 700);
+    debounceTimers[dkey] = setTimeout(() => persistDay(dk), 700);
   }
 }
 
-function computeStats() {
+function computeStats(monthIdx) {
+  const { year, month } = MONTHS[monthIdx];
+  const nDays = daysInMonth(year, month);
   let feedTotal = 0, feedDone = 0, storyTotal = 0, storyDone = 0;
-  Object.keys(DAYS).forEach((d) => {
-    const c = DAYS[d];
-    const t = dayState[d] || {};
-    if (c.feed) {
+  for (let d = 1; d <= nDays; d++) {
+    const dk = dateKeyFor(year, month, d);
+    const content = getDayContentByDk(dk);
+    const t = dayState[dk] || {};
+    if (content.feed) {
       feedTotal++;
       if (t.feed && t.feed.status === "publicado") feedDone++;
     }
-    if (c.story) {
+    if (content.story) {
       storyTotal++;
       if (t.story && t.story.status === "publicado") storyDone++;
     }
-  });
+  }
   return { feedTotal, feedDone, storyTotal, storyDone };
 }
 
-function resetAll() {
-  if (!confirm("Reiniciar todo o progresso de setembro? Essa ação não pode ser desfeita.")) return;
-  Object.keys(DAYS).map(Number).forEach((d) => {
+function resetMonth(monthIdx) {
+  const { year, month } = MONTHS[monthIdx];
+  const label = MONTH_NAMES[month] + " de " + year;
+  if (!confirm("Reiniciar todo o progresso de " + label + "? Essa ação não pode ser desfeita.")) return;
+  const nDays = daysInMonth(year, month);
+  for (let d = 1; d <= nDays; d++) {
+    const dk = dateKeyFor(year, month, d);
+    const content = getDayContentByDk(dk);
     const base = {};
-    if (DAYS[d].feed) base.feed = emptyTracker();
-    if (DAYS[d].story) base.story = emptyTracker();
-    dayState[d] = base;
-    persistDay(d);
-  });
+    if (content.feed) base.feed = emptyTracker();
+    if (content.story) base.story = emptyTracker();
+    dayState[dk] = base;
+    persistDay(dk);
+  }
   closeModal();
   renderApp();
+}
+
+async function switchMonth(newIdx) {
+  newIdx = Math.max(0, Math.min(MONTHS.length - 1, newIdx));
+  if (newIdx === currentMonthIdx) return;
+  currentMonthIdx = newIdx;
+  closeModal();
+  await loadMonth(newIdx);
+  renderApp();
+  subscribeMonth(newIdx);
 }
 
 /* ---------- HTML: chip / status / imagens / links ---------- */
@@ -1103,7 +1181,9 @@ function linksListHtml(links) {
     .join("");
 }
 function sectionHtml(section) {
-  const itemsHtml = section.items.map((it) => "<p>" + escapeHtml(it) + "</p>").join("");
+  const itemsHtml = section.items.length
+    ? section.items.map((it) => "<p>" + escapeHtml(it) + "</p>").join("")
+    : '<p style="opacity:.5">Ainda sem conteúdo — clique em Editar para preencher.</p>';
   return (
     '<div class="av-section"><div class="av-section-title-row"><p class="av-section-title">' +
     escapeHtml(section.title) +
@@ -1116,7 +1196,6 @@ function sectionHtml(section) {
     "</div></div>"
   );
 }
-
 function flattenContent(type, content) {
   if (type === "feed") {
     return content.sections.map((s) => s.title.toUpperCase() + "\n" + s.items.join("\n")).join("\n\n");
@@ -1126,7 +1205,7 @@ function flattenContent(type, content) {
   return txt;
 }
 
-function trackerPanelHtml(day, type, content, tracker) {
+function trackerPanelHtml(dk, type, content, tracker) {
   const isFeed = type === "feed";
   const accent = isFeed ? BRAND.pink : BRAND.teal;
   const accentDark = isFeed ? BRAND.pinkDark : BRAND.tealDark;
@@ -1140,7 +1219,7 @@ function trackerPanelHtml(day, type, content, tracker) {
       '<div class="av-section"><p class="av-section-title" style="color:' +
       accentDark +
       ';margin-bottom:5px">Sequência de stories</p><div class="av-section-body">' +
-      content.items.map((it) => "<p>" + escapeHtml(it) + "</p>").join("") +
+      (content.items.length ? content.items.map((it) => "<p>" + escapeHtml(it) + "</p>").join("") : '<p style="opacity:.5">Ainda sem conteúdo — clique em Editar para preencher.</p>') +
       "</div>" +
       (content.note ? '<p class="av-note-line" style="color:' + accentDark + '">' + escapeHtml(content.note) + "</p>" : "") +
       "</div>";
@@ -1192,7 +1271,7 @@ function trackerPanelHtml(day, type, content, tracker) {
     '<div class="av-notes-row"><p class="av-notes-label" style="color:' + accentDark + '">' + icon("note", 12) + " Anotações / ajustes deste dia</p>" +
     '<textarea class="av-textarea notes-textarea" rows="2" placeholder="Ex.: trocar a criança do vídeo, ajustar cor da legenda...">' + escapeHtml(tracker.notes || "") + "</textarea>" +
     '<div class="av-notes-save-row"><button type="button" class="av-save-btn save-notes-btn" style="background:' + accent + '">Salvar</button>' +
-    '<span class="notes-saved-tag">' + (tracker.notes ? notesSavedTagHtml() : "") + "</span></div>" +
+    '<span class="notes-saved-tag">' + (tracker.notes && tracker.notes.trim() ? notesSavedTagHtml() : "") + "</span></div>" +
     "</div>" +
     "</div>"
   );
@@ -1203,21 +1282,22 @@ function notesSavedTagHtml() {
 }
 
 /* ---------- Célula do calendário ---------- */
-function cellHtml(day) {
-  const content = DAYS[day];
+function cellHtml(dk) {
+  const { day } = parseDk(dk);
+  const content = getDayContentByDk(dk);
   const hasFeed = !!content.feed;
   const hasStory = !!content.story;
   if (!hasFeed && !hasStory) {
     return '<div class="av-cell-empty"><span>' + day + "</span></div>";
   }
-  const tracker = dayState[day] || {};
+  const tracker = dayState[dk] || {};
   const feedStatus = tracker.feed ? tracker.feed.status : null;
   const storyStatus = tracker.story ? tracker.story.status : null;
   const borderColor = STATUS[feedStatus || storyStatus || "pendente"].border;
   const hasNotes = !!((tracker.feed && tracker.feed.notes) || (tracker.story && tracker.story.notes));
   const preview = (content.feed && content.feed.theme) || (content.story && content.story.theme) || "";
   return (
-    '<button type="button" class="av-day-card" data-day="' + day + '" style="border-color:' + borderColor + '">' +
+    '<button type="button" class="av-day-card" data-dk="' + dk + '" style="border-color:' + borderColor + '">' +
     '<div class="av-day-top"><span class="av-day-num">' + day + "</span>" +
     (hasNotes ? '<span class="av-day-notes-tag">Notas</span>' : "") +
     "</div>" +
@@ -1230,29 +1310,31 @@ function cellHtml(day) {
   );
 }
 
-function refreshDayCellDom(day) {
-  const oldBtn = document.querySelector('.av-day-card[data-day="' + day + '"]');
+function refreshDayCellDom(dk) {
+  const oldBtn = document.querySelector('.av-day-card[data-dk="' + dk + '"]');
   if (!oldBtn) return;
   const wrapper = document.createElement("div");
-  wrapper.innerHTML = cellHtml(day);
+  wrapper.innerHTML = cellHtml(dk);
   oldBtn.replaceWith(wrapper.firstElementChild);
 }
 
 function updateStatsDom() {
-  const stats = computeStats();
+  const stats = computeStats(currentMonthIdx);
   const pills = document.querySelectorAll(".av-stat-pill span");
   if (pills[0]) pills[0].textContent = "Feed " + stats.feedDone + "/" + stats.feedTotal;
   if (pills[1]) pills[1].textContent = "Stories " + stats.storyDone + "/" + stats.storyTotal;
 }
 
 /* ---------- Grade ---------- */
-function renderGrid() {
-  const jsStart = weekdayOf(1);
+function renderGrid(monthIdx) {
+  const { year, month } = MONTHS[monthIdx];
+  const nDays = daysInMonth(year, month);
+  const jsStart = weekdayOfDate(year, month, 1);
   const mondayIndex = (jsStart + 6) % 7;
   let cellsHtml = "";
   for (let i = 0; i < mondayIndex; i++) cellsHtml += '<div class="av-cell-blank"></div>';
-  for (let d = 1; d <= 30; d++) cellsHtml += cellHtml(d);
-  let total = mondayIndex + 30;
+  for (let d = 1; d <= nDays; d++) cellsHtml += cellHtml(dateKeyFor(year, month, d));
+  let total = mondayIndex + nDays;
   while (total % 7 !== 0) {
     cellsHtml += '<div class="av-cell-blank"></div>';
     total++;
@@ -1264,15 +1346,26 @@ function renderGrid() {
 }
 
 function renderHeader() {
-  const stats = computeStats();
+  const stats = computeStats(currentMonthIdx);
+  const { year, month } = MONTHS[currentMonthIdx];
+  const nDays = daysInMonth(year, month);
+  const monthLabel = MONTH_NAMES[month] + " " + year;
+  const canPrev = currentMonthIdx > 0;
+  const canNext = currentMonthIdx < MONTHS.length - 1;
   return (
     '<div class="av-header"><div class="av-header-row"><div class="av-header-left">' +
     '<img src="' + IMG_LOGO + '" alt="Espaço Any e Viny" class="av-logo" />' +
     '<div><h1 class="av-display av-title">Calendário de conteúdo</h1>' +
-    '<p class="av-subtitle">01 SET — 30 SET 2026 · clique em um dia para ver o roteiro</p>' +
+    '<div class="av-month-nav">' +
+    '<button type="button" id="prev-month-btn" class="av-month-arrow"' + (canPrev ? "" : " disabled") + ">" + icon("chevronleft", 15) + "</button>" +
+    '<span class="av-month-label">' + monthLabel + "</span>" +
+    '<button type="button" id="next-month-btn" class="av-month-arrow"' + (canNext ? "" : " disabled") + ">" + icon("chevronright", 15) + "</button>" +
+    "</div>" +
+    '<p class="av-subtitle">01 — ' + nDays + ' · clique em um dia para ver ou planejar o conteúdo</p>' +
     (fsDb ? '<p class="av-sync-badge"><span class="av-sync-dot"></span>Sincronizado com a equipe em tempo real</p>' : "") +
     "</div>" +
-    '<button type="button" id="reset-btn" class="av-reset-btn">Reiniciar</button>' +
+    "</div>" +
+    '<button type="button" id="reset-btn" class="av-reset-btn">Reiniciar mês</button>' +
     "</div>" +
     '<div class="av-stats-row">' +
     '<div class="av-stat-pill" style="color:' + BRAND.pinkDark + '">' + icon("camera", 14) + "<span>Feed " + (loaded ? stats.feedDone : "–") + "/" + stats.feedTotal + "</span></div>" +
@@ -1290,7 +1383,7 @@ function renderApp() {
     '<div class="av-stars" id="stars"></div>' +
     '<div class="av-card"><div class="av-panel"><div class="av-rainbow"></div>' +
     renderHeader() +
-    '<div class="av-body">' + renderGrid() + "</div>" +
+    '<div class="av-body">' + renderGrid(currentMonthIdx) + "</div>" +
     "</div>" +
     '<div class="av-mascot-wrap" id="mascot-wrap">' +
     '<img src="' + MASCOT_CAST[0].img + '" alt="' + MASCOT_CAST[0].name + '" class="av-mascot-img" id="main-mascot" />' +
@@ -1298,14 +1391,20 @@ function renderApp() {
 
   document.getElementById("grid").addEventListener("click", (e) => {
     const btn = e.target.closest(".av-day-card");
-    if (btn) openModal(Number(btn.dataset.day));
+    if (btn) openModal(btn.dataset.dk);
   });
-  document.getElementById("reset-btn").addEventListener("click", resetAll);
+  document.getElementById("reset-btn").addEventListener("click", () => resetMonth(currentMonthIdx));
   document.getElementById("main-mascot").addEventListener("click", onMascotClick);
+  const prevBtn = document.getElementById("prev-month-btn");
+  const nextBtn = document.getElementById("next-month-btn");
+  if (prevBtn) prevBtn.addEventListener("click", () => switchMonth(currentMonthIdx - 1));
+  if (nextBtn) nextBtn.addEventListener("click", () => switchMonth(currentMonthIdx + 1));
 
   renderFallingStars();
 }
 
+let mascotCastIndex = 0;
+let mascotMsgIndex = null;
 function onMascotClick() {
   mascotCastIndex = (mascotCastIndex + 1) % MASCOT_CAST.length;
   mascotMsgIndex = mascotMsgIndex === null ? 0 : (mascotMsgIndex + 1) % MASCOT_TIPS.length;
@@ -1335,12 +1434,13 @@ function renderFallingStars() {
 }
 
 /* ---------- Modal do dia ---------- */
-function openModal(day) {
-  const content = DAYS[day];
-  const wd = weekdayOf(day);
+function openModal(dk) {
+  const content = getDayContentByDk(dk);
+  const { year, month, day } = parseDk(dk);
+  const wd = weekdayOfDate(year, month, day);
   const mascot = mascotFor(day);
-  const phrase = phraseFor(day, content.feed);
-  const tracker = dayState[day] || {};
+  const phrase = phraseFor(day, content.feed && content.feed.sections && content.feed.sections[0].items.length ? content.feed : null);
+  const tracker = dayState[dk] || {};
 
   const overlay = document.createElement("div");
   overlay.className = "av-modal-overlay";
@@ -1349,7 +1449,7 @@ function openModal(day) {
     '<div class="av-modal-card" id="modal-card">' +
     '<div class="av-modal-banner"><button type="button" class="av-modal-close" id="modal-close">' + icon("x", 17) + "</button>" +
     '<p class="av-modal-weekday">' + WEEKDAYS_FULL[wd] + "</p>" +
-    '<h2 class="av-display av-modal-date">' + day + " de setembro</h2></div>" +
+    '<h2 class="av-display av-modal-date">' + day + " de " + MONTH_NAMES[month].toLowerCase() + " de " + year + "</h2></div>" +
     '<div class="av-modal-mascot-row"><img src="' + mascot.img + '" alt="' + mascot.name + '" class="av-modal-mascot-img" />' +
     '<div class="av-modal-phrase">' + escapeHtml(phrase) + "</div></div>" +
     '<div class="av-modal-body" id="modal-body"></div>' +
@@ -1358,9 +1458,9 @@ function openModal(day) {
 
   const body = overlay.querySelector("#modal-body");
   let bodyHtml = "";
-  if (content.feed) bodyHtml += trackerPanelHtml(day, "feed", content.feed, tracker.feed || emptyTracker());
-  if (content.story) bodyHtml += trackerPanelHtml(day, "story", content.story, tracker.story || emptyTracker());
-  if (!content.feed && !content.story) bodyHtml = '<p class="av-modal-empty">Domingo — sem publicação programada.</p>';
+  if (content.feed) bodyHtml += trackerPanelHtml(dk, "feed", content.feed, tracker.feed || emptyTracker());
+  if (content.story) bodyHtml += trackerPanelHtml(dk, "story", content.story, tracker.story || emptyTracker());
+  if (!content.feed && !content.story) bodyHtml = '<p class="av-modal-empty">Sem publicação programada.</p>';
   body.innerHTML = bodyHtml;
 
   overlay.addEventListener("click", (e) => {
@@ -1368,31 +1468,31 @@ function openModal(day) {
   });
   overlay.querySelector("#modal-close").addEventListener("click", closeModal);
 
-  if (content.feed) wireTrackerPanel(overlay, day, "feed", content.feed);
-  if (content.story) wireTrackerPanel(overlay, day, "story", content.story);
+  if (content.feed) wireTrackerPanel(overlay, dk, "feed", content.feed);
+  if (content.story) wireTrackerPanel(overlay, dk, "story", content.story);
 
-  openDayNum = day;
+  openDayKey = dk;
 }
 
 function closeModal() {
   const overlay = document.getElementById("modal-overlay");
   if (overlay) overlay.remove();
-  openDayNum = null;
+  openDayKey = null;
 }
 
-function rerenderTrackerPanel(overlay, day, type) {
+function rerenderTrackerPanel(overlay, dk, type) {
   const oldPanel = overlay.querySelector('.av-tracker[data-type="' + type + '"]');
   if (!oldPanel) return;
-  const content = DAYS[day][type];
-  const tracker = getTracker(day, type);
+  const content = getDayContentByDk(dk)[type];
+  const tracker = getTracker(dk, type);
   const wrapper = document.createElement("div");
-  wrapper.innerHTML = trackerPanelHtml(day, type, content, tracker);
+  wrapper.innerHTML = trackerPanelHtml(dk, type, content, tracker);
   const newPanel = wrapper.firstElementChild;
   oldPanel.replaceWith(newPanel);
-  wireTrackerPanel(overlay, day, type, content);
+  wireTrackerPanel(overlay, dk, type, content);
 }
 
-function wireTrackerPanel(overlay, day, type, content) {
+function wireTrackerPanel(overlay, dk, type, content) {
   const panel = overlay.querySelector('.av-tracker[data-type="' + type + '"]');
   if (!panel) return;
 
@@ -1419,24 +1519,24 @@ function wireTrackerPanel(overlay, day, type, content) {
   }
   if (saveContentBtn) {
     saveContentBtn.addEventListener("click", () => {
-      updateTracker(day, type, { contentText: contentTextarea.value }, true);
-      rerenderTrackerPanel(overlay, day, type);
+      updateTracker(dk, type, { contentText: contentTextarea.value }, true);
+      rerenderTrackerPanel(overlay, dk, type);
     });
   }
   if (restoreBtn) {
     restoreBtn.addEventListener("click", () => {
       if (!confirm("Restaurar o conteúdo original deste dia? Sua edição será apagada.")) return;
-      updateTracker(day, type, { contentText: "" }, true);
-      rerenderTrackerPanel(overlay, day, type);
+      updateTracker(dk, type, { contentText: "" }, true);
+      rerenderTrackerPanel(overlay, dk, type);
     });
   }
 
   panel.querySelectorAll(".av-status-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const key = btn.dataset.status;
-      updateTracker(day, type, { status: key }, true);
+      updateTracker(dk, type, { status: key }, true);
       refreshTrackerStatus(panel, type, key);
-      refreshDayCellDom(day);
+      refreshDayCellDom(dk);
       updateStatsDom();
     });
   });
@@ -1451,16 +1551,16 @@ function wireTrackerPanel(overlay, day, type, content) {
     label.textContent = "Enviando...";
     try {
       const compressed = await Promise.all(files.map(compressImage));
-      const tracker = getTracker(day, type);
+      const tracker = getTracker(dk, type);
       const newImages = compressed.map((src, i) => ({ id: uid(), src, name: files[i].name }));
-      updateTracker(day, type, { images: tracker.images.concat(newImages) }, true);
-      panel.querySelector(".image-grid-slot").innerHTML = imageGridHtml(getTracker(day, type).images);
-      wireImageGrid(panel, day, type);
+      updateTracker(dk, type, { images: tracker.images.concat(newImages) }, true);
+      panel.querySelector(".image-grid-slot").innerHTML = imageGridHtml(getTracker(dk, type).images);
+      wireImageGrid(panel, dk, type);
     } catch (err) {}
     label.textContent = "Subir imagens";
     fileInput.value = "";
   });
-  wireImageGrid(panel, day, type);
+  wireImageGrid(panel, dk, type);
 
   panel.querySelector(".add-link-btn").addEventListener("click", () => {
     const labelInput = panel.querySelector(".link-label-input");
@@ -1468,26 +1568,26 @@ function wireTrackerPanel(overlay, day, type, content) {
     let url = urlInput.value.trim();
     if (!url) return;
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
-    const tracker = getTracker(day, type);
-    updateTracker(day, type, { links: tracker.links.concat([{ id: uid(), url, label: labelInput.value.trim() }]) }, true);
-    panel.querySelector(".links-list-slot").innerHTML = linksListHtml(getTracker(day, type).links);
-    wireLinksList(panel, day, type);
+    const tracker = getTracker(dk, type);
+    updateTracker(dk, type, { links: tracker.links.concat([{ id: uid(), url, label: labelInput.value.trim() }]) }, true);
+    panel.querySelector(".links-list-slot").innerHTML = linksListHtml(getTracker(dk, type).links);
+    wireLinksList(panel, dk, type);
     labelInput.value = "";
     urlInput.value = "";
   });
-  wireLinksList(panel, day, type);
+  wireLinksList(panel, dk, type);
 
   const textarea = panel.querySelector(".notes-textarea");
   textarea.addEventListener("input", () => {
-    updateTracker(day, type, { notes: textarea.value }, false);
+    updateTracker(dk, type, { notes: textarea.value }, false);
   });
 
   const saveBtn = panel.querySelector(".save-notes-btn");
   saveBtn.addEventListener("click", () => {
-    updateTracker(day, type, { notes: textarea.value }, true);
+    updateTracker(dk, type, { notes: textarea.value }, true);
     const tagSlot = panel.querySelector(".notes-saved-tag");
     tagSlot.innerHTML = textarea.value.trim() ? notesSavedTagHtml() : "";
-    refreshDayCellDom(day);
+    refreshDayCellDom(dk);
     const originalLabel = saveBtn.textContent;
     saveBtn.textContent = "Salvo!";
     setTimeout(() => {
@@ -1495,7 +1595,7 @@ function wireTrackerPanel(overlay, day, type, content) {
     }, 1200);
   });
 
-  if (type === "feed") {
+  if (type === "feed" && content.sections) {
     const promptSections = content.sections.filter((s) => s.isPrompt);
     panel.querySelectorAll(".copy-btn").forEach((btn, idx) => {
       const text = promptSections[idx] ? promptSections[idx].items.join("\n") : "";
@@ -1515,28 +1615,28 @@ function wireTrackerPanel(overlay, day, type, content) {
   }
 }
 
-function wireImageGrid(panel, day, type) {
+function wireImageGrid(panel, dk, type) {
   panel.querySelectorAll(".thumb-img").forEach((imgEl) => {
     imgEl.addEventListener("click", () => openLightbox(imgEl.src));
   });
   panel.querySelectorAll(".remove-img-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.dataset.id;
-      const tracker = getTracker(day, type);
-      updateTracker(day, type, { images: tracker.images.filter((im) => im.id !== id) }, true);
-      panel.querySelector(".image-grid-slot").innerHTML = imageGridHtml(getTracker(day, type).images);
-      wireImageGrid(panel, day, type);
+      const tracker = getTracker(dk, type);
+      updateTracker(dk, type, { images: tracker.images.filter((im) => im.id !== id) }, true);
+      panel.querySelector(".image-grid-slot").innerHTML = imageGridHtml(getTracker(dk, type).images);
+      wireImageGrid(panel, dk, type);
     });
   });
 }
-function wireLinksList(panel, day, type) {
+function wireLinksList(panel, dk, type) {
   panel.querySelectorAll(".remove-link-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.dataset.id;
-      const tracker = getTracker(day, type);
-      updateTracker(day, type, { links: tracker.links.filter((l) => l.id !== id) }, true);
-      panel.querySelector(".links-list-slot").innerHTML = linksListHtml(getTracker(day, type).links);
-      wireLinksList(panel, day, type);
+      const tracker = getTracker(dk, type);
+      updateTracker(dk, type, { links: tracker.links.filter((l) => l.id !== id) }, true);
+      panel.querySelector(".links-list-slot").innerHTML = linksListHtml(getTracker(dk, type).links);
+      wireLinksList(panel, dk, type);
     });
   });
 }
@@ -1559,10 +1659,12 @@ function openLightbox(src) {
 }
 
 /* ---------- Início ---------- */
-loadAll().then(() => {
+(async function init() {
+  await loadMonth(currentMonthIdx);
+  loaded = true;
   renderApp();
-  subscribeFirestore();
-});
+  subscribeMonth(currentMonthIdx);
+})();
 </script>
 </body>
 </html>
