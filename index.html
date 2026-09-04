@@ -882,8 +882,12 @@ function blankDayContent() {
 
 function getDayContentByDk(dk) {
   const { year, month, day } = parseDk(dk);
-  if (year === 2026 && month === 8 && DAYS[day]) return DAYS[day];
-  return blankDayContent();
+  const base = year === 2026 && month === 8 && DAYS[day] ? DAYS[day] : {};
+  const blank = blankDayContent();
+  return {
+    feed: base.feed || blank.feed,
+    story: base.story || blank.story,
+  };
 }
 
 /* ---------- Firebase (dados compartilhados da equipe) ---------- */
