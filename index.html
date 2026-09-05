@@ -1,15 +1,16 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" style="overflow-x:hidden;">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>Calendário de Conteúdo — Espaço Any e Viny</title>
 <style>
-body { margin:0; background:#FFFBF3; }
+html, body { margin:0; overflow-x:hidden; width:100%; }
+body { background:#FFFBF3; }
 *,*::before,*::after{ box-sizing:border-box; }
 @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;600;700;800&display=swap');
 
-.av-root { font-family:'Nunito',sans-serif; max-width:1080px; margin:0 auto; padding:20px 10px 40px; position:relative; box-sizing:border-box; }
+.av-root { font-family:'Nunito',sans-serif; max-width:1080px; width:100%; margin:0 auto; padding:20px 10px 40px; position:relative; box-sizing:border-box; overflow-x:hidden; }
 .av-root *, .av-root *::before, .av-root *::after { box-sizing:border-box; }
 .av-display { font-family:'Baloo 2',sans-serif; }
 
@@ -54,7 +55,7 @@ body { margin:0; background:#FFFBF3; }
 .av-cell-empty span { font-size:13px; font-weight:800; }
 .av-cell-blank { min-height:110px; }
 
-.av-day-card { display:flex; flex-direction:column; justify-content:space-between; min-height:110px; width:100%; border-radius:16px; border-width:2px; border-style:solid; background:#fff; padding:8px; text-align:left; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:transform .15s ease, box-shadow .15s ease; font-family:inherit; }
+.av-day-card { display:flex; flex-direction:column; justify-content:space-between; min-height:110px; width:100%; overflow:hidden; border-radius:16px; border-width:2px; border-style:solid; background:#fff; padding:8px; text-align:left; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:transform .15s ease, box-shadow .15s ease; font-family:inherit; }
 .av-day-card:hover { transform:translateY(-2px); box-shadow:0 10px 20px rgba(0,0,0,0.12); }
 .av-day-top { display:flex; align-items:flex-start; justify-content:space-between; gap:4px; }
 .av-day-num { font-size:13px; font-weight:800; color:#2B1A33; }
@@ -212,6 +213,13 @@ body { margin:0; background:#FFFBF3; }
 /* Telas muito largas (desktop grande): não deixa o card esticar demais */
 @media (min-width:1400px){
   .av-root{max-width:1180px;}
+}
+
+/* Em telas de celular, os textos das etiquetas de status não cabem em 7 colunas —
+   mantém só o ícone colorido, a cor da borda do dia já indica o status. */
+@media (max-width:640px){
+  .av-day-chips .av-chip span { display:none; }
+  .av-day-chips .av-chip { padding:4px 6px; }
 }
 </style>
 </head>
